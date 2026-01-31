@@ -1,0 +1,305 @@
+{% extends 'first/base.html' %}
+{% block title %}Главная | AI Test Generator{% endblock %}
+
+{% block extra_css %}
+<style>
+    header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 40px;
+    }
+
+    .logo {
+        font-weight: bold; 
+        color: #1a3c6e; 
+        font-size: 1.4rem;
+    }
+
+    .card {
+        background: white;
+        padding: 25px;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        margin-bottom: 25px;
+    }
+
+    h2 { margin-bottom: 20px; color: #1a3c6e; }
+
+    textarea {
+        min-height: 100px;
+        resize: vertical;
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        font-family: inherit;
+    }
+
+    .drop-zone {
+        border: 2px dashed #c2d9ff;
+        border-radius: 14px;
+        padding: 20px;
+        text-align: center;
+        background: #f8fbff;
+        margin-bottom: 20px;
+    }
+
+    .actions-row {
+        display: flex;
+        gap: 10px;
+        margin-top: 15px;
+    }
+
+    .btn {
+        border: none;
+        padding: 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: bold;
+        color: white;
+        transition: 0.3s;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+    }
+
+    .btn:disabled {
+        background: #ccc !important;
+        cursor: not-allowed;
+    }
+
+    .primary-btn { background: #1a3c6e; width: 100%; }
+    .success-btn { background: #28a745; width: 100%; margin-top: 10px; }
+    .danger-btn { background: #dc3545; flex: 1; }
+    .neutral-btn { background: #6c757d; flex: 1; }
+
+    .question-box {
+        background: #f0f7ff;
+        padding: 25px;
+        border-radius: 14px;
+        border: 2px solid #c2d9ff;
+        line-height: 1.6;
+        min-height: 100px;
+        color: #1a3c6e;
+    }
+
+    .logout-btn {
+        background: #dc3545;
+        color: white;
+        padding: 8px 15px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-size: 0.9rem;
+    }
+
+    ul { list-style: none; padding: 0; margin-top: 15px; }
+    li { margin-bottom: 10px; padding: 8px; border-radius: 6px; background: rgba(255,255,255,0.5); }
+
+    .hidden { display: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <header>
+        <div class="logo">AI Test Generator</div>
+        {% if user.is_authenticated %}
+            <div style="display:flex; align-items:center; gap:15px;">
+                <span style="font-weight: 600;">{{ user.username }}</span>
+                <a href="{% url 'logout' %}" class="logout-btn">Выйти</a>
+            </div>
+        {% endif %}
+    </header>
+
+    <div class="card" id="settings-card">
+        <h2>Настройка теста</h2>
+        <textarea id="topic" placeholder="Введите тему теста (ОБЯЗАТЕЛЬНО)"></textarea>
+
+        <div class="drop-zone">
+            <p style="margin:0; color: #5a7db0;">PDF контекст (необязательно)</p>
+            <input type="file" id="file_input" accept="application/pdf" style="margin-top:10px;">
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <select id="q_type" style="flex:1; padding: 10px; border-radius: 8px; border: 1px solid #ccc;">
+                <option value="test">Тестовый (с вариантами)</option>
+                <option value="open">Открытый вопрос</option>
+            </select>
+
+            <select id="complexity" style="flex:1; padding: 10px; border-radius: 8px; border: 1px solid #ccc;">
+                <option value="easy">Лёгкая</option>
+                <option value="medium" selected>Средняя</option>
+                <option value="hard">Сложная</option>
+            </select>
+
+            <input type="number" id="q_count" value="10" title="Количество вопросов" style="width: 60px; padding: 10px; border-radius: 8px; border: 1px solid #ccc;">
+        </div>
+
+        <button class="btn primary-btn" onclick="fullGenerationCycle()">Начать генерацию</button>
+    </div>
+
+    <div class="card" id="work-area">
+        <h2 id="q-counter">Вопрос №...</h2>
+        
+        <div class="question-box" id="q-box">
+            Введите тему выше и нажмите «Начать генерацию».
+        </div>
+
+        <div class="actions-row">
+            <button id="regen-q-btn" class="btn danger-btn" onclick="fullGenerationCycle()" disabled>Другой вопрос</button>
+            <button id="regen-a-btn" class="btn neutral-btn" onclick="generateOnlyAnswers()" disabled>Другие ответы</button>
+        </div>
+
+        <button id="save-btn" class="btn success-btn" onclick="saveAndNext()" disabled>Сохранить и далее →</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const qBox = document.getElementById('q-box');
+    const qCounter = document.getElementById('q-counter');
+    const regenQBtn = document.getElementById('regen-q-btn');
+    const regenABtn = document.getElementById('regen-a-btn');
+    const saveBtn = document.getElementById('save-btn');
+    
+    let currentQuestionText = ""; 
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    async function fullGenerationCycle() {
+        const topic = document.getElementById('topic').value.trim();
+        if (!topic) return alert("Пожалуйста, введите тему теста!");
+
+        qBox.innerHTML = "<em>Идёт генерация...</em>";
+        setButtonsState(true);
+
+        const formData = new FormData();
+        formData.append('topic', topic);
+        formData.append('q_type', document.getElementById('q_type').value);
+        formData.append('complexity', document.getElementById('complexity').value);
+        formData.append('q_count', document.getElementById('q_count').value);
+        const file = document.getElementById('file_input').files[0];
+        if (file) formData.append('pdf_file', file);
+
+        try {
+            const response = await fetch('/generate-question/', {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+            });
+            const data = await response.json();
+
+            if (data.error) throw new Error(data.error);
+
+            currentQuestionText = data.question;
+            qCounter.innerText = `Вопрос ${data.current_number} из ${data.target_count}`;
+
+            if (document.getElementById('q_type').value === 'test') {
+                await generateOnlyAnswers();
+            } else {
+                qBox.innerText = currentQuestionText;
+                setButtonsState(false);
+            }
+
+        } catch (e) {
+            qBox.innerHTML = `<span style="color:red">Ошибка: ${e.message}</span>`;
+            setButtonsState(false);
+        }
+    }
+
+    async function generateOnlyAnswers() {
+        qBox.innerHTML = `<strong>${currentQuestionText}</strong><br><br><em>Идёт генерация...</em>`;
+        saveBtn.disabled = true;
+
+        try {
+            await new Promise(r => setTimeout(r, 400));
+
+            const response = await fetch('/generate-answers/');
+            const data = await response.json();
+
+            if (data.error) throw new Error(data.error);
+
+            let html = `<strong>${currentQuestionText}</strong><ul>`;
+            data.answers.forEach(ans => {
+                const color = ans.is_correct ? '#28a745' : '#333';
+                const icon = ans.is_correct ? '●' : '○';
+                html += `<li style="color: ${color}; font-weight: ${ans.is_correct ? 'bold' : 'normal'}">
+                            ${icon} ${ans.text}
+                         </li>`;
+            });
+            html += "</ul>";
+
+            qBox.innerHTML = html;
+            setButtonsState(false);
+
+        } catch (e) {
+            qBox.innerHTML = `<strong>${currentQuestionText}</strong><br><br><span style="color:red">Ошибка при генерации ответов. Нажмите "Другие ответы", чтобы повторить.</span>`;
+            setButtonsState(false);
+        }
+    }
+
+    async function saveAndNext() {
+        setButtonsState(true);
+        try {
+            const response = await fetch('/save-final/');
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                if (data.total_saved >= data.target_count) {
+                    finishTest(data.total_saved);
+                } else {
+                    fullGenerationCycle();
+                }
+            } else {
+                throw new Error(data.error);
+            }
+        } catch (e) {
+            alert("Ошибка при сохранении: " + e.message);
+            setButtonsState(false);
+        }
+    }
+
+    async function startNewTest() {
+        if (confirm("Это удалит весь текущий прогресс. Вы уверены?")) {
+            await fetch('/reset-test/');
+            location.reload();
+        }
+    }
+
+    function setButtonsState(disabled) {
+        regenQBtn.disabled = disabled;
+        regenABtn.disabled = disabled || (document.getElementById('q_type').value !== 'test');
+        saveBtn.disabled = disabled;
+    }
+
+    function finishTest(total) {
+        qCounter.innerText = "Тест готов!";
+        document.getElementById('work-area').innerHTML = `
+            <div style="text-align:center;">
+                <h2 style="color:#28a745;">Поздравляем!</h2>
+                <p>Вы успешно составили тест из <strong>${total}</strong> вопросов.</p>
+                <div style="margin-top:20px;">
+                    <a href="/download-test/" class="btn success-btn" style="text-decoration:none; margin-bottom:10px;">Скачать результат (.txt)</a>
+                    <button class="btn primary-btn" onclick="startNewTest()">Создать новый тест</button>
+                </div>
+            </div>
+        `;
+    }
+</script>
+{% endblock %}

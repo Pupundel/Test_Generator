@@ -1,0 +1,120 @@
+{% extends 'first/base.html' %}
+
+{% block title %}Регистрация | AI Test Generator{% endblock %}
+
+{% block extra_css %}
+<style>
+    .login-page {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        padding: 20px;
+    }
+
+    .login-container {
+        width: 100%;
+        max-width: 400px;
+        background: white;
+        border-radius: 16px;
+        padding: 40px;
+        box-shadow: 0 8px 24px rgba(0, 123, 255, 0.15);
+        animation: fadeUp .5s ease;
+    }
+
+    .login-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .login-subtitle {
+        color: #5a7db0;
+        font-size: 0.95rem;
+        margin-top: 10px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #1a3c6e;
+        font-size: 15px;
+    }
+
+    .form-group input:focus {
+        outline: none;
+        border-color: #007bff;
+    }
+
+    .login-link {
+        text-align: center;
+        margin-top: 20px;
+        color: #5a7db0;
+        font-size: 15px;
+    }
+
+    .login-link a {
+        color: #007bff;
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+    .login-link a:hover {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-page">
+    <div class="login-container">
+        <div class="login-header">
+            <a class="logo">AI Test Generator</a>
+            <div class="login-subtitle">Создайте новый аккаунт</div>
+        </div>
+        
+        <form method="post" action="{% url 'signup' %}">
+            {% csrf_token %}
+
+            <div class="form-group">
+                <label for="username">Логин</label>
+                <input type="text" id="username" name="username" placeholder="Придумайте логин" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password1">Пароль</label>
+                <input type="password" id="password1" name="password1" placeholder="Придумайте пароль" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password2">Подтвердите пароль</label>
+                <input type="password" id="password2" name="password2" placeholder="Повторите пароль" required>
+            </div>
+            
+            {% if form.errors %}
+                <div style="color: #dc3545; margin-bottom: 15px;">
+                    {% for field in form %}
+                        {% for error in field.errors %}
+                            <p>{{ error }}</p>
+                        {% endfor %}
+                    {% endfor %}
+                    {% for error in form.non_field_errors %}
+                        <p>{{ error }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            
+            <button type="submit" class="primary-btn">Зарегистрироваться</button>
+
+        </form>
+        
+        <div class="login-link">
+            Уже есть аккаунт? <a href="{% url 'login' %}">Войти</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
